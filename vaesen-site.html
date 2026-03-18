@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vaesen — Jeu de Rôle d'Horreur Nordique</title>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Cinzel:wght@400;500;600;700&family=Cinzel+Decorative:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parchment: #f4ead5;
+    --parchment-dark: #e8d9b8;
+    --ink: #2a1f14;
+    --ink-light: #4a3928;
+    --blood: #8b2500;
+    --blood-dark: #6b1c00;
+    --moss: #3a4a2a;
+    --moss-light: #5a6a4a;
+    --shadow: rgba(42, 31, 20, 0.6);
+    --gold: #c4a055;
+    --gold-dim: #9a7a3a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--blood) var(--parchment-dark);
+  }
+
+  body {
+    font-family: 'Crimson Text', Georgia, serif;
+    background: var(--ink);
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* ── Navigation ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    background: linear-gradient(180deg, rgba(42,31,20,0.95) 0%, rgba(42,31,20,0.7) 80%, transparent 100%);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.4s;
+  }
+  nav .logo {
+    font-family: 'Cinzel Decorative', serif;
+    color: var(--gold);
+    font-size: 1.2rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  nav ul {
+    list-style: none;
+    display: flex;
+    gap: 2rem;
+  }
+  nav a {
+    color: var(--parchment);
+    text-decoration: none;
+    font-family: 'Cinzel', serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.8;
+    transition: opacity 0.3s, color 0.3s;
+  }
+  nav a:hover { opacity: 1; color: var(--gold); }
+
+  @media (max-width: 768px) {
+    nav ul { display: none; }
+  }
+
+  /* ── Sections ── */
+  section {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .parchment-bg {
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(139,37,0,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(58,74,42,0.08) 0%, transparent 40%),
+      linear-gradient(175deg, #f4ead5 0%, #e8d9b8 40%, #dcc9a0 70%, #e0d0ab 100%);
+    background-color: var(--parchment);
+  }
+
+  .dark-bg {
+    background:
+      radial-gradient(ellipse at 30% 70%, rgba(58,74,42,0.3) 0%, transparent 50%),
+      linear-gradient(175deg, #1a1510 0%, #2a1f14 50%, #1a1510 100%);
+    color: var(--parchment);
+  }
+
+  /* ── Hero ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background:
+      radial-gradient(ellipse at center, rgba(42,31,20,0.3) 0%, rgba(42,31,20,0.85) 100%),
+      linear-gradient(175deg, #1a2a1a 0%, #0d1a0d 50%, #1a1510 100%);
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-conic-gradient(rgba(196,160,85,0.02) 0% 25%, transparent 0% 50%) 0 0 / 80px 80px,
+      radial-gradient(circle at 50% 50%, transparent 40%, rgba(0,0,0,0.4) 100%);
+    pointer-events: none;
+  }
+
+  .hero-symbol {
+    width: 100px;
+    height: 100px;
+    margin-bottom: 2rem;
+    opacity: 0.7;
+    animation: pulse-glow 4s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.5; filter: drop-shadow(0 0 8px rgba(196,160,85,0.2)); }
+    50% { opacity: 0.8; filter: drop-shadow(0 0 20px rgba(196,160,85,0.4)); }
+  }
+
+  .hero h1 {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(2.5rem, 7vw, 5rem);
+    color: var(--parchment);
+    letter-spacing: 0.08em;
+    line-height: 1.15;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  }
+
+  .hero .subtitle {
+    font-family: 'Cinzel', serif;
+    font-size: clamp(1rem, 2.5vw, 1.5rem);
+    color: var(--blood);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+
+  .hero .tagline {
+    font-family: 'Crimson Text', serif;
+    font-style: italic;
+    font-size: 1.2rem;
+    color: var(--parchment);
+    opacity: 0.7;
+    max-width: 500px;
+  }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--gold-dim);
+    font-family: 'Cinzel', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    animation: bob 2s ease-in-out infinite;
+  }
+  .scroll-hint::after {
+    content: '▼';
+    display: block;
+    text-align: center;
+    margin-top: 0.3rem;
+    font-size: 0.6rem;
+  }
+
+  @keyframes bob {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(8px); }
+  }
+
+  /* ── Content Blocks ── */
+  .content-wrap {
+    max-width: 900px;
+    width: 100%;
+    padding: 6rem 2rem;
+  }
+
+  .section-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: clamp(1.8rem, 4vw, 3rem);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+  }
+
+  .dark-bg .section-title { color: var(--parchment); }
+  .parchment-bg .section-title { color: var(--ink); }
+
+  .section-subtitle {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+  }
+
+  .parchment-bg .section-subtitle { color: var(--blood); }
+  .dark-bg .section-subtitle { color: var(--blood); }
+
+  .divider {
+    width: 80px;
+    height: 2px;
+    background: var(--blood);
+    margin: 2rem 0;
+    position: relative;
+  }
+  .divider::before {
+    content: '✦';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.6rem;
+    color: var(--blood);
+    background: inherit;
+    padding: 0 0.5rem;
+  }
+  .parchment-bg .divider::before { background: var(--parchment); }
+  .dark-bg .divider::before { background: var(--ink); }
+
+  .lead-text {
+    font-size: 1.25rem;
+    line-height: 1.8;
+    max-width: 700px;
+  }
+
+  .dark-bg .lead-text { color: rgba(244,234,213,0.85); }
+
+  /* ── Two-column ── */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    margin-top: 2rem;
+  }
+
+  @media (max-width: 700px) {
+    .two-col { grid-template-columns: 1fr; gap: 2rem; }
+  }
+
+  .card {
+    background: rgba(42,31,20,0.06);
+    border: 1px solid rgba(42,31,20,0.12);
+    padding: 2rem;
+    position: relative;
+  }
+
+  .dark-bg .card {
+    background: rgba(244,234,213,0.04);
+    border-color: rgba(244,234,213,0.1);
+  }
+
+  .card h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 1rem;
+  }
+
+  .parchment-bg .card h3 { color: var(--blood); }
+  .dark-bg .card h3 { color: var(--gold); }
+
+  /* ── Principles List ── */
+  .principles-list {
+    list-style: none;
+    counter-reset: principle;
+  }
+
+  .principles-list li {
+    counter-increment: principle;
+    padding: 1.2rem 0;
+    border-bottom: 1px solid rgba(42,31,20,0.1);
+    display: flex;
+    align-items: baseline;
+    gap: 1.2rem;
+    font-size: 1.15rem;
+  }
+
+  .dark-bg .principles-list li {
+    border-bottom-color: rgba(244,234,213,0.1);
+  }
+
+  .principles-list li::before {
+    content: counter(principle);
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.8rem;
+    color: var(--blood);
+    flex-shrink: 0;
+    width: 2rem;
+    text-align: center;
+    line-height: 1;
+  }
+
+  /* ── Mystery Steps ── */
+  .mystery-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 2rem;
+  }
+
+  .mystery-step {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 1.5rem;
+    padding: 1.5rem 0;
+    position: relative;
+  }
+
+  .mystery-step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 29px;
+    top: 3.5rem;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, var(--blood), transparent);
+  }
+
+  .step-number {
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--blood);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 1.5rem;
+    color: var(--blood);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .parchment-bg .step-number { background: var(--parchment); }
+  .dark-bg .step-number { background: var(--ink); }
+
+  .step-content h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.15rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .parchment-bg .step-content h3 { color: var(--ink); }
+  .dark-bg .step-content h3 { color: var(--parchment); }
+
+  .step-content p {
+    opacity: 0.75;
+    font-size: 1rem;
+  }
+
+  /* ── Attributes Grid ── */
+  .attr-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    margin-top: 2rem;
+    max-width: 600px;
+  }
+
+  .attr-cell {
+    padding: 2rem;
+    text-align: center;
+    border: 1px solid rgba(139,37,0,0.2);
+  }
+
+  .attr-cell h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 1.2rem;
+    color: var(--blood);
+    margin-bottom: 0.3rem;
+  }
+
+  .attr-cell p {
+    font-style: italic;
+    opacity: 0.7;
+    font-size: 0.95rem;
+  }
+
+  /* ── Combat section ── */
+  .combat-rules {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+
+  @media (max-width: 700px) {
+    .combat-rules { grid-template-columns: 1fr; }
+  }
+
+  .combat-rule {
+    text-align: center;
+    padding: 2rem 1rem;
+  }
+
+  .combat-rule .rule-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: block;
+    color: var(--blood);
+  }
+
+  .combat-rule h3 {
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.8rem;
+    color: var(--gold);
+  }
+
+  .combat-rule p {
+    font-size: 0.95rem;
+    opacity: 0.8;
+    line-height: 1.6;
+  }
+
+  /* ── States / Conditions ── */
+  .states-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+  }
+
+  @media (max-width: 600px) {
+    .states-grid { grid-template-columns: 1fr; }
+  }
+
+  .state-group h3 {
+    font-family: 'Cinzel', serif;
+    color: var(--blood);
+    font-size: 1.1rem;
+    margin-bottom: 0.8rem;
+    letter-spacing: 0.05em;
+  }
+
+  .state-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .state-tag {
+    background: rgba(42,31,20,0.08);
+    border: 1px solid rgba(42,31,20,0.15);
+    padding: 0.4rem 1rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── CTA / Footer ── */
+  .cta-section {
+    text-align: center;
+    padding: 8rem 2rem;
+  }
+
+  .cta-section .section-title {
+    color: var(--parchment);
+    margin-bottom: 1.5rem;
+  }
+
+  .cta-section .tagline {
+    color: rgba(244,234,213,0.7);
+    font-style: italic;
+    font-size: 1.2rem;
+    max-width: 550px;
+    margin: 0 auto 3rem;
+    line-height: 1.8;
+  }
+
+  .cta-button {
+    display: inline-block;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--parchment);
+    border: 2px solid var(--blood);
+    padding: 1rem 3rem;
+    text-decoration: none;
+    transition: all 0.4s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-button::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--blood);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.4s ease;
+    z-index: -1;
+  }
+
+  .cta-button:hover::before { transform: scaleX(1); }
+  .cta-button:hover { color: var(--parchment); }
+
+  footer {
+    background: #0d0a07;
+    color: rgba(244,234,213,0.3);
+    text-align: center;
+    padding: 2rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+  }
+
+  /* ── Ink splatter decorations ── */
+  .ink-spot {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(42,31,20,0.06);
+    pointer-events: none;
+  }
+
+  .dark-bg .ink-spot { background: rgba(244,234,213,0.03); }
+
+  /* ── Fade-in animations ── */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ── Archetype badges ── */
+  .archetypes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .archetype-badge {
+    font-family: 'Cinzel', serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.1em;
+    padding: 0.6rem 1.5rem;
+    border: 1px solid var(--blood);
+    color: var(--blood);
+    position: relative;
+  }
+
+  .dark-bg .archetype-badge {
+    border-color: var(--gold-dim);
+    color: var(--gold);
+  }
+
+  /* ── Highlight text ── */
+  .highlight { color: var(--blood); font-weight: 600; }
+  .dark-bg .highlight { color: var(--gold); }
+
+  /* ── Breakline ornament ── */
+  .ornament {
+    text-align: center;
+    font-size: 1.5rem;
+    color: var(--blood);
+    margin: 3rem 0;
+    opacity: 0.4;
+    letter-spacing: 1em;
+  }
+
+  .dark-bg .ornament { color: var(--gold-dim); }
+
+  /* ── Quote block ── */
+  .quote-block {
+    border-left: 3px solid var(--blood);
+    padding: 1.5rem 2rem;
+    margin: 2rem 0;
+    font-style: italic;
+    font-size: 1.15rem;
+    opacity: 0.85;
+  }
+
+  .dark-bg .quote-block { border-left-color: var(--gold-dim); }
+
+  /* ── Noise grain ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="logo">Vaesen</div>
+  <ul>
+    <li><a href="#monde">Le Monde</a></li>
+    <li><a href="#vaesen">Les Vaesen</a></li>
+    <li><a href="#societe">La Société</a></li>
+    <li><a href="#personnage">Personnage</a></li>
+    <li><a href="#systeme">Système</a></li>
+    <li><a href="#mystere">Le Mystère</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <svg class="hero-symbol" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="45" stroke="#c4a055" stroke-width="2" opacity="0.6"/>
+    <circle cx="50" cy="50" r="35" stroke="#c4a055" stroke-width="1" opacity="0.3"/>
+    <path d="M50 15 L50 85" stroke="#c4a055" stroke-width="1.5" opacity="0.5"/>
+    <path d="M15 50 L85 50" stroke="#c4a055" stroke-width="1.5" opacity="0.5"/>
+    <path d="M25 25 Q50 45 75 25 Q55 50 75 75 Q50 55 25 75 Q45 50 25 25Z" stroke="#c4a055" stroke-width="1.5" fill="none" opacity="0.4"/>
+    <circle cx="50" cy="50" r="8" stroke="#c4a055" stroke-width="2" opacity="0.7"/>
+  </svg>
+  <h1>Vaesen</h1>
+  <p class="subtitle">Jeu de Rôle d'Horreur Nordique</p>
+  <p class="tagline">Guide de l'Initiateur au Nord Mythique — Une introduction à la Société</p>
+  <div class="scroll-hint">Découvrir</div>
+</section>
+
+<!-- Le Nord Mythique -->
+<section id="monde" class="parchment-bg">
+  <div class="content-wrap fade-in">
+    <div class="section-subtitle">Le Décor</div>
+    <h2 class="section-title">Le Nord Mythique</h2>
+    <div class="divider"></div>
+    <p class="lead-text">
+      La Scandinavie du 19ème siècle est en pleine mutation. Les bateaux à vapeur et les trains conquièrent la nature sauvage. Les usines s'élèvent autour des villes.
+    </p>
+    <div class="quote-block">
+      Mais dans les ombres des forêts profondes et les montagnes solitaires, les anciens mythes sont toujours bien réels. Ce n'est pas une leçon d'histoire. C'est un monde où le folklore est réalité.
+    </div>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.3rem; margin-bottom: 1.5rem; color: var(--blood);">Le Conflit : L'Industrie contre le Folklore</h3>
+
+    <div class="two-col">
+      <div class="card">
+        <h3>L'Ordre et le Nouveau Monde</h3>
+        <p>L'industrialisation, la guerre et la révolution changent le monde. Les anciennes coutumes se meurent. Le progrès avance, inexorable.</p>
+      </div>
+      <div class="card">
+        <h3>Le Folklore Corrompu</h3>
+        <p>En réaction, les Vaesen changent aussi. Ils ne se contentent plus de bouillie et d'un chapeau. Ils sont devenus agressifs, sanguinaires et erratiques. Les anciens pactes sont rompus.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Les Vaesen -->
+<section id="vaesen" class="dark-bg">
+  <div class="content-wrap fade-in">
+    <div class="section-subtitle">Les Créatures</div>
+    <h2 class="section-title">Les Vaesen</h2>
+    <div class="divider"></div>
+    <p class="lead-text">
+      Ce sont les créatures du folklore scandinave : Trolls, Lindworms, Fantômes et Vaettir. Ils sont invisibles aux sens humains, à moins qu'ils ne choisissent d'apparaître.
+    </p>
+    <p class="lead-text" style="margin-top: 1.5rem;">
+      Ils vivent aux côtés de l'humanité, invisibles, dans les bois sombres et les montagnes isolées.
+    </p>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.3rem; margin-bottom: 1rem; color: var(--gold);">La Vue</h3>
+    <p class="lead-text">
+      Vous êtes l'un des rares à pouvoir voir les Vaesen, même lorsqu'ils souhaitent rester cachés. Ce don vient d'un <span class="highlight">Traumatisme</span> — vous avez été touché par le surnaturel. Vous avez failli mourir dans un incendie ou avez croisé le regard d'un loup-garou.
+    </p>
+    <div class="quote-block">
+      L'enfant du jeudi a un long chemin à parcourir.
+    </div>
+  </div>
+</section>
+
+<!-- La Société -->
+<section id="societe" class="parchment-bg">
+  <div class="content-wrap fade-in">
+    <div class="section-subtitle">Votre Base</div>
+    <h2 class="section-title">La Société</h2>
+    <div class="divider"></div>
+    <p class="lead-text">
+      Basée dans la ville d'Upsala, au château délabré de Gyllencreutz.
+    </p>
+    <p class="lead-text" style="margin-top: 1rem;">
+      <span class="highlight">Mission :</span> Protéger l'humanité et étudier les Vaesen là où la science échoue.
+    </p>
+    <p class="lead-text" style="margin-top: 1rem;">
+      Les derniers membres ont disparu il y a 10 ans. Vous avez les clés. Vous devez tout reconstruire.
+    </p>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.3rem; margin-bottom: 1.5rem; color: var(--blood);">Les 6 Principes du Jeu</h3>
+    <ol class="principles-list">
+      <li>Les Vaesen ne sont ni bons ni mauvais.</li>
+      <li>La nature est sombre et dangereuse.</li>
+      <li>La Scandinavie change.</li>
+      <li>Le savoir et la ruse sont les clés du succès.</li>
+      <li>Le voyage fait partie du but.</li>
+      <li>Vous ne survivrez pas sans les autres.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- Votre Personnage -->
+<section id="personnage" class="dark-bg">
+  <div class="content-wrap fade-in">
+    <div class="section-subtitle">Création</div>
+    <h2 class="section-title">Votre Personnage</h2>
+    <div class="divider"></div>
+    <p class="lead-text">
+      Vous jouez un <span class="highlight">Archétype</span> basé sur les professions du 19ème siècle. Vous n'êtes pas un super-héros ; vous êtes un humain avec des défauts, de l'équipement et un souvenir.
+    </p>
+
+    <div class="archetypes">
+      <span class="archetype-badge">Le Médecin</span>
+      <span class="archetype-badge">Le Chasseur</span>
+      <span class="archetype-badge">L'Occultiste</span>
+      <span class="archetype-badge">Le Prêtre</span>
+      <span class="archetype-badge">L'Écrivain</span>
+    </div>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.2rem; margin-bottom: 1.5rem; color: var(--gold);">L'Âme du Personnage</h3>
+
+    <div class="combat-rules">
+      <div class="combat-rule">
+        <span class="rule-icon">◈</span>
+        <h3>Motivation</h3>
+        <p>Pourquoi chassez-vous ? Pour découvrir ? Pour venger ? Pour protéger ?</p>
+      </div>
+      <div class="combat-rule">
+        <span class="rule-icon">◈</span>
+        <h3>Traumatisme</h3>
+        <p>L'événement spécifique qui vous a donné la Vue.</p>
+      </div>
+      <div class="combat-rule">
+        <span class="rule-icon">◈</span>
+        <h3>Sombre Secret</h3>
+        <p>Un mécanisme qui fournit des accroches narratives — un crime caché, un passé honteux.</p>
+      </div>
+    </div>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.2rem; margin-bottom: 1.5rem; color: var(--gold);">Attributs & Compétences</h3>
+
+    <div class="attr-grid">
+      <div class="attr-cell">
+        <h3>Physique</h3>
+        <p>Puissance physique, endurance</p>
+      </div>
+      <div class="attr-cell">
+        <h3>Précision</h3>
+        <p>Coordination, motricité</p>
+      </div>
+      <div class="attr-cell">
+        <h3>Esprit</h3>
+        <p>Logique, éducation, intellect</p>
+      </div>
+      <div class="attr-cell">
+        <h3>Empathie</h3>
+        <p>Compréhension, charme, manipulation</p>
+      </div>
+    </div>
+    <p style="margin-top: 1.5rem; opacity: 0.6; font-family: 'Cinzel', serif; font-size: 0.9rem; letter-spacing: 0.05em;">
+      Compétences clés : Enquête, Savoir, Combat à distance, Observation.
+    </p>
+  </div>
+</section>
+
+<!-- Système de Jeu -->
+<section id="systeme" class="parchment-bg">
+  <div class="content-wrap fade-in">
+    <div class="section-subtitle">Les Règles</div>
+    <h2 class="section-title">Système de Jeu</h2>
+    <div class="divider"></div>
+
+    <div class="two-col">
+      <div>
+        <h3 style="font-family: 'Cinzel', serif; color: var(--blood); margin-bottom: 1rem;">Mécanique de base</h3>
+        <p>Une réserve de dés D6 formée par l'addition d'un <span class="highlight">Attribut</span> et d'une <span class="highlight">Compétence</span>. Vous avez besoin d'au moins un 6 pour réussir.</p>
+        <p style="margin-top: 1rem;"><span class="highlight">Forcer le jet :</span> Vous pouvez relancer les échecs, mais au risque de subir un État.</p>
+      </div>
+      <div>
+        <h3 style="font-family: 'Cinzel', serif; color: var(--blood); margin-bottom: 1rem;">États & Blessures</h3>
+        <p>Pas de Points de Vie. Vous subissez des <span class="highlight">États</span>.</p>
+        <div class="states-grid" style="margin-top: 1rem;">
+          <div class="state-group">
+            <h3>Physique</h3>
+            <div class="state-tags">
+              <span class="state-tag">Épuisé</span>
+              <span class="state-tag">Meurtri</span>
+              <span class="state-tag">Blessé</span>
+            </div>
+          </div>
+          <div class="state-group">
+            <h3>Mental</h3>
+            <div class="state-tags">
+              <span class="state-tag">En colère</span>
+              <span class="state-tag">Effrayé</span>
+              <span class="state-tag">Désespéré</span>
+            </div>
+          </div>
+        </div>
+        <p style="margin-top: 1rem;"><span class="highlight">Brisé :</span> Lorsque vous subissez trop d'états, vous êtes brisé et subissez une blessure critique.</p>
+      </div>
+    </div>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.2rem; color: var(--blood); margin-bottom: 1rem;">La Peur</h3>
+    <p class="lead-text">
+      Rencontrer des Vaesen terrifiants nécessite un <span class="highlight">Test de Peur</span> (Logique ou Empathie). L'échec entraîne des états mentaux ou la perte de contrôle du personnage — fuir, se figer, s'évanouir.
+    </p>
+  </div>
+</section>
+
+<!-- Structure d'une Session -->
+<section id="mystere" class="dark-bg">
+  <div class="content-wrap fade-in">
+    <div class="section-subtitle">La Session</div>
+    <h2 class="section-title">Structure d'un Mystère</h2>
+    <div class="divider"></div>
+
+    <div class="mystery-flow">
+      <div class="mystery-step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>L'Invitation</h3>
+          <p>Une lettre ou une rumeur parvient au Château.</p>
+        </div>
+      </div>
+      <div class="mystery-step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>La Préparation</h3>
+          <p>Achat d'équipement, recherche d'informations.</p>
+        </div>
+      </div>
+      <div class="mystery-step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Le Voyage</h3>
+          <p>Obtenir un Avantage sur la route.</p>
+        </div>
+      </div>
+      <div class="mystery-step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>L'Enquête</h3>
+          <p>Explorer les lieux, trouver des indices.</p>
+        </div>
+      </div>
+      <div class="mystery-step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h3>La Confrontation</h3>
+          <p>Le rituel pour expulser le Vaesen.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ornament">✦ ✦ ✦</div>
+
+    <h3 style="font-family: 'Cinzel', serif; font-size: 1.2rem; color: var(--gold); margin-bottom: 1rem;">Combattre les Vaesen</h3>
+    <div class="combat-rules">
+      <div class="combat-rule">
+        <span class="rule-icon">⚔</span>
+        <h3>Invulnérables</h3>
+        <p>Ni les balles ni l'acier ne peuvent les tuer. Les armes ne font que gagner du temps.</p>
+      </div>
+      <div class="combat-rule">
+        <span class="rule-icon">🔍</span>
+        <h3>La Solution</h3>
+        <p>Vous devez découvrir le Secret et la Faiblesse du Vaesen.</p>
+      </div>
+      <div class="combat-rule">
+        <span class="rule-icon">✦</span>
+        <h3>Le Rituel</h3>
+        <p>Le succès nécessite l'accomplissement d'un rituel spécifique basé sur l'enquête.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="dark-bg cta-section">
+  <div class="fade-in">
+    <svg style="width:80px;height:80px;margin-bottom:2rem;opacity:0.6;" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="45" stroke="#c4a055" stroke-width="2.5"/>
+      <path d="M50 15 L50 85 M15 50 L85 50" stroke="#c4a055" stroke-width="1.5" opacity="0.5"/>
+      <path d="M28 28 Q50 42 72 28 Q58 50 72 72 Q50 58 28 72 Q42 50 28 28Z" stroke="#c4a055" stroke-width="2" fill="none"/>
+      <circle cx="50" cy="50" r="10" stroke="#c4a055" stroke-width="2"/>
+    </svg>
+    <h2 class="section-title">Rejoignez la Société</h2>
+    <p class="tagline">Le Nord Mythique vous attend. Rassemblez vos amis, allumez vos lanternes et protégez l'humanité de ce qui se cache dans l'obscurité.</p>
+    <a href="#" class="cta-button">Préparez-vous à l'Initiation</a>
+  </div>
+</section>
+
+<footer>
+  Vaesen — Jeu de Rôle d'Horreur Nordique &middot; Free League Publishing
+</footer>
+
+<script>
+// Intersection Observer for fade-in animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Subtle parallax on nav
+let lastScroll = 0;
+window.addEventListener('scroll', () => {
+  const nav = document.querySelector('nav');
+  if (window.scrollY > 100) {
+    nav.style.background = 'rgba(42,31,20,0.97)';
+  } else {
+    nav.style.background = '';
+  }
+});
+</script>
+
+</body>
+</html>
