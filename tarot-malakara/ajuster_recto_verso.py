@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Prépare le Tarot du Malakara (A4, 3 x 2 cartes de 60 x 120 mm) pour
-l'impression recto verso.
+"""Prépare le Tarot du Malakara (A4, cartes de 60 x 120 mm) pour l'impression
+recto verso.
 
-- Ajoute un fond perdu autour des cartes (beige au recto, sombre au verso)
-  pour qu'un léger décalage de l'imprimante ne laisse pas de liseré blanc.
-- Replace les traits de coupe à l'extérieur de ce fond perdu.
-- Peut décaler toutes les pages verso de (dx, dy) mm pour compenser le
-  décalage propre à l'imprimante (mesuré avec la feuille de calibration).
+Les pages recto sont reprises telles quelles. Chaque verso est reconstruit :
+- le cadre de l'illustration est recentré sur la carte, avec une bande jaune
+  (parchemin) plus large tout autour (--bande-cotes / --bande-haut-bas) ;
+- le parchemin est prolongé au-delà du trait de coupe (fond perdu), jusqu'à
+  rejoindre la carte voisine, pour qu'un décalage de l'imprimante ne laisse
+  pas de liseré blanc ;
+- toutes les pages verso peuvent être décalées de (dx, dy) mm pour compenser
+  le décalage propre à l'imprimante, mesuré avec la feuille de calibration.
 
 Usage :
-    python3 ajuster_recto_verso.py original.pdf sortie.pdf [--fond-perdu 5]
+    python3 ajuster_recto_verso.py original.pdf sortie.pdf
+            [--bande-cotes 2.5] [--bande-haut-bas 3.5] [--fond-perdu 4]
             [--verso-dx 0] [--verso-dy 0]
     python3 ajuster_recto_verso.py --calibration calibration.pdf
 
@@ -18,67 +22,220 @@ dy > 0 = vers le bas. Ce sont directement les valeurs lues sur la feuille
 de calibration (D = +, G = -, B = +, H = -).
 """
 import argparse
+import io
+import re
 
+import numpy as np
 import pymupdf
+from PIL import Image, ImageFilter
 
 MM = 72 / 25.4
-CARTE_L, CARTE_H = 60 * MM, 120 * MM
-GRIS_COUPE = (0.533333, 0.533333, 0.533333)
+CARTE_L, CARTE_H = 60, 120  # mm
+DPI_VERSO = 400
 
 
-def cellules(page):
-    """Cartes de la page : rectangles pleins de la taille d'une carte."""
+def placements(page):
+    """Cartes de la page : (zone de découpe, zone de l'image) en points, repère haut-gauche."""
+    h = page.rect.height
+    motif = re.compile(
+        r"n ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re W\*? n\s*q\s*"
+        r"([\d.]+) 0 0 ([\d.]+) ([\d.]+) ([\d.]+) cm\s*/\S+ Do"
+    )
     res = []
-    for d in page.get_drawings():
-        r = d["rect"]
-        if d["type"] == "f" and abs(r.width - CARTE_L) < 1 and abs(r.height - CARTE_H) < 1:
-            res.append((r, d["fill"]))
+    for m in motif.finditer(page.read_contents().decode("latin1")):
+        cx, cy, cw, ch, a, d, e, f = map(float, m.groups())
+        res.append((pymupdf.Rect(cx, h - cy - ch, cx + cw, h - cy), pymupdf.Rect(e, h - f - d, e + a, h - f)))
     return res
 
 
-def traits_de_coupe(page, grille, xs, ys, marge):
-    """Petits traits gris dans la marge, dans le prolongement des lignes de coupe."""
-    debut, fin = marge + 1 * MM, marge + 4 * MM
-    for x in xs:
-        page.draw_line((x, grille.y0 - debut), (x, grille.y0 - fin), color=GRIS_COUPE, width=0.35)
-        page.draw_line((x, grille.y1 + debut), (x, grille.y1 + fin), color=GRIS_COUPE, width=0.35)
-    for y in ys:
-        page.draw_line((grille.x0 - debut, y), (grille.x0 - fin, y), color=GRIS_COUPE, width=0.35)
-        page.draw_line((grille.x1 + debut, y), (grille.x1 + fin, y), color=GRIS_COUPE, width=0.35)
+def luminance(a):
+    return a[..., :3].mean(axis=2)
 
 
-def ajuster(entree, sortie, fond_perdu_mm, verso_dx_mm, verso_dy_mm):
+def rogner_noir(a):
+    """Retire les bandes noires (fond derrière la carte) autour de l'illustration."""
+    lum = luminance(a)
+    lignes = np.nonzero(lum.mean(axis=1) > 60)[0]
+    colonnes = np.nonzero(lum.mean(axis=0) > 60)[0]
+    return a[lignes[0]:lignes[-1] + 1, colonnes[0]:colonnes[-1] + 1]
+
+
+def cadre(lum):
+    """Bord extérieur du filet sombre qui encadre l'illustration (x0, y0, x1, y1), en pixels."""
+    h, w = lum.shape
+    sombre = lum < 90
+    lignes = range(int(h * 0.2), int(h * 0.8), 7)
+    colonnes = range(int(w * 0.2), int(w * 0.8), 7)
+    x0 = np.median([np.argmax(sombre[y, : w // 4]) for y in lignes])
+    x1 = w - np.median([np.argmax(sombre[y, ::-1][: w // 4]) for y in lignes])
+    y0 = np.median([np.argmax(sombre[: h // 8, x]) for x in colonnes])
+    y1 = h - np.median([np.argmax(sombre[::-1, x][: h // 8]) for x in colonnes])
+    return x0, y0, x1, y1
+
+
+def ping_pong(i, debut, fin):
+    """Ramène les indices i dans [debut, fin) par réflexions successives."""
+    n = fin - debut
+    k = np.mod(i - debut, 2 * n)
+    return debut + np.where(k < n, k, 2 * n - 1 - k)
+
+
+def nettoyer_bande(bande, axe):
+    """Remplace les lignes d'une bande de parchemin touchées par un ornement ou un coin
+    par leur reflet côté propre, pour pouvoir la prolonger sans recopier l'ornement."""
+    lum = luminance(bande)
+    mini = lum.min(axis=1 - axe)
+    n = len(mini)
+    propre = mini > 95
+    propre[:40] = propre[-40:] = False  # coins arrondis et vieillis
+    idx = np.arange(n)
+    for i in np.nonzero(~propre)[0]:
+        s = i
+        while s > 0 and not propre[s - 1]:
+            s -= 1
+        e = i
+        while e < n - 1 and not propre[e + 1]:
+            e += 1
+        for j in (2 * s - 1 - i, 2 * e + 1 - i):
+            if 0 <= j < n and propre[j]:
+                idx[i] = j
+                break
+        else:
+            idx[i] = np.nonzero(propre)[0][np.argmin(abs(np.nonzero(propre)[0] - i))]
+    return np.take(bande, idx, axis=axe)
+
+
+def verso_elargi(illu, bande_x, bande_y, fond_perdu):
+    """Carte verso de 60 x 120 mm + fond perdu tout autour, en image PIL à DPI_VERSO.
+
+    Le cadre de l'illustration est placé à bande_x mm des bords gauche/droit et
+    bande_y mm des bords haut/bas ; tout ce qui est au-delà est du parchemin
+    prolongé à partir de la bande d'origine."""
+    illu = rogner_noir(illu).astype(np.float32)
+    h, w = illu.shape[:2]
+    fx0, fy0, fx1, fy1 = cadre(luminance(illu))
+    sx = (CARTE_L - 2 * bande_x) / (fx1 - fx0)  # mm par pixel source
+    sy = (CARTE_H - 2 * bande_y) / (fy1 - fy0)
+
+    # Zone source nécessaire pour couvrir carte + fond perdu (en pixels source).
+    bx0 = fx0 + (-fond_perdu - bande_x) / sx
+    bx1 = fx0 + (CARTE_L + fond_perdu - bande_x) / sx
+    by0 = fy0 + (-fond_perdu - bande_y) / sy
+    by1 = fy0 + (CARTE_H + fond_perdu - bande_y) / sy
+    marge = int(np.ceil(max(-bx0, bx1 - w, -by0, by1 - h, 0))) + 8
+
+    # Bandes de parchemin d'origine (sans le bord extrême), nettoyées des ornements.
+    a, l = 6, 14
+    gauche = nettoyer_bande(illu[:, a:a + l], 0)
+    droite = nettoyer_bande(illu[:, w - a - l:w - a], 0)
+    haut = nettoyer_bande(illu[a:a + l, :], 1)
+    bas = nettoyer_bande(illu[h - a - l:h - a, :], 1)
+
+    y, x = np.mgrid[-marge:h + marge, -marge:w + marge]
+    yy, xx = ping_pong(y, 0, h), ping_pong(x, 0, w)
+    lateral = np.where(
+        (x < w / 2)[..., None],
+        gauche[yy, ping_pong(x, a, a + l) - a],
+        droite[yy, ping_pong(x, w - a - l, w - a) - (w - a - l)],
+    )
+    vertical = np.where(
+        (y < h / 2)[..., None],
+        haut[ping_pong(y, a, a + l) - a, xx],
+        bas[ping_pong(y, h - a - l, h - a) - (h - a - l), xx],
+    )
+    ex = np.maximum(np.maximum(a - x, x - (w - 1 - a)), 0)
+    ey = np.maximum(np.maximum(a - y, y - (h - 1 - a)), 0)
+    poids = np.where(ex + ey > 0, ey / np.maximum(ex + ey, 1), 0.5)[..., None]
+    reflet = (1 - poids) * lateral + poids * vertical
+
+    # Au-delà du premier reflet, les reflets successifs forment des motifs
+    # répétés : on passe progressivement à un parchemin lissé et légèrement grainé.
+    lisse = np.asarray(
+        Image.fromarray(np.clip(reflet, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(12))
+    ).astype(np.float32)
+    grain = np.asarray(
+        Image.fromarray(np.clip(128 + np.random.default_rng(0).normal(0, 14, y.shape), 0, 255).astype(np.uint8))
+        .filter(ImageFilter.GaussianBlur(0.8))
+    ).astype(np.float32)[..., None] - 128
+    dehors = np.hypot(np.maximum(np.maximum(-x, x - (w - 1)), 0), np.maximum(np.maximum(-y, y - (h - 1)), 0))
+    loin = np.clip((dehors - l / 2) / l, 0, 1)[..., None]
+    parchemin = (1 - loin) * reflet + loin * (lisse + grain)
+
+    # L'illustration recouvre le parchemin, avec un fondu sur ses 6 px extérieurs
+    # et des coins arrondis (les coins d'origine sont sombres).
+    r = 30
+    px = np.abs(x - (w - 1) / 2) - (w / 2 - r)
+    py = np.abs(y - (h - 1) / 2) - (h / 2 - r)
+    interieur = -(np.hypot(np.maximum(px, 0), np.maximum(py, 0)) + np.minimum(np.maximum(px, py), 0) - r)
+    alpha = np.clip((interieur - 2) / 4, 0, 1)[..., None]
+    source = np.zeros_like(parchemin)
+    source[marge:marge + h, marge:marge + w] = illu
+    image = alpha * source + (1 - alpha) * parchemin
+
+    ppm = DPI_VERSO / 25.4
+    taille = (round((CARTE_L + 2 * fond_perdu) * ppm), round((CARTE_H + 2 * fond_perdu) * ppm))
+    boite = (bx0 + marge, by0 + marge, bx1 + marge, by1 + marge)
+    tuile = Image.fromarray(np.clip(image, 0, 255).astype(np.uint8)).resize(taille, Image.LANCZOS, box=boite)
+    etirement = sy / sx
+    return tuile, etirement
+
+
+def voisins(cartes, c):
+    """Distance (mm) jusqu'à la carte voisine de chaque côté, None s'il n'y en a pas."""
+    g = d = h = b = None
+    for o in cartes:
+        if o == c:
+            continue
+        if abs(o.y0 - c.y0) < 1 and o.x1 <= c.x0:
+            g = min(g or 1e9, (c.x0 - o.x1) / MM)
+        if abs(o.y0 - c.y0) < 1 and o.x0 >= c.x1:
+            d = min(d or 1e9, (o.x0 - c.x1) / MM)
+        if abs(o.x0 - c.x0) < 1 and o.y1 <= c.y0:
+            h = min(h or 1e9, (c.y0 - o.y1) / MM)
+        if abs(o.x0 - c.x0) < 1 and o.y0 >= c.y1:
+            b = min(b or 1e9, (o.y0 - c.y1) / MM)
+    return g, h, d, b
+
+
+def ajuster(entree, sortie, bande_x, bande_y, fond_perdu, verso_dx_mm, verso_dy_mm):
     src = pymupdf.open(entree)
-    fond_perdu = fond_perdu_mm * MM
 
-    # La grille (identique sur toutes les pages) : union des cartes de la 1re page.
-    toutes = cellules(src[0])
-    grille = pymupdf.Rect(toutes[0][0])
-    for r, _ in toutes[1:]:
-        grille |= r
-    xs = sorted({round(r.x0, 2) for r, _ in toutes} | {round(r.x1, 2) for r, _ in toutes})
-    ys = sorted({round(r.y0, 2) for r, _ in toutes} | {round(r.y1, 2) for r, _ in toutes})
+    # Illustration du verso (la même sur toutes les pages verso).
+    xref = src[1].get_images(full=True)[0][0]
+    pix = pymupdf.Pixmap(src, xref)
+    if pix.alpha:
+        pix = pymupdf.Pixmap(pix, 0)
+    illu = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)[..., :3]
+    tuile, etirement = verso_elargi(illu, bande_x, bande_y, fond_perdu)
+    print(f"verso : bande {bande_x} mm (côtés) / {bande_y} mm (haut, bas), étirement vertical {100 * (etirement - 1):+.1f} %")
 
-    # 1) Chaque page reconstruite sans décalage : fond perdu, page d'origine
-    #    découpée à la grille (on retire ainsi les anciens traits de coupe),
-    #    puis nouveaux traits de coupe.
-    propre = pymupdf.open()
-    for pno, page in enumerate(src):
-        neuve = propre.new_page(width=page.rect.width, height=page.rect.height)
-        for r, couleur in cellules(page):
-            elargi = pymupdf.Rect(r.x0 - fond_perdu, r.y0 - fond_perdu, r.x1 + fond_perdu, r.y1 + fond_perdu)
-            neuve.draw_rect(elargi, color=None, fill=couleur, width=0)
-        neuve.show_pdf_page(grille, src, pno, clip=grille)
-        traits_de_coupe(neuve, grille, xs, ys, fond_perdu)
+    # Page intermédiaire contenant une carte verso et son fond perdu : chaque
+    # carte en affiche une découpe, l'image n'est donc incluse qu'une fois.
+    png = io.BytesIO()
+    tuile.save(png, "PNG", optimize=True)
+    tuile_doc = pymupdf.open()
+    tuile_page = tuile_doc.new_page(width=(CARTE_L + 2 * fond_perdu) * MM, height=(CARTE_H + 2 * fond_perdu) * MM)
+    tuile_page.insert_image(tuile_page.rect, stream=png.getvalue())
 
-    # 2) Assemblage final : les pages impaires (verso) sont décalées si demandé.
     final = pymupdf.open()
-    for pno, page in enumerate(propre):
-        neuve = final.new_page(width=page.rect.width, height=page.rect.height)
-        cible = pymupdf.Rect(page.rect)
-        if pno % 2 == 1:
+    for pno in range(len(src)):
+        if pno % 2 == 0:
+            final.insert_pdf(src, from_page=pno, to_page=pno)
+            continue
+        largeur = src[pno].rect.width
+        # Emplacement exact des cartes : miroir des zones de découpe du recto.
+        cartes = [pymupdf.Rect(largeur - r.x1, r.y0, largeur - r.x0, r.y1) for r, _ in placements(src[pno - 1])]
+        page = final.new_page(width=largeur, height=src[pno].rect.height)
+        for c in cartes:
+            fp = [fond_perdu if v is None else min(fond_perdu, v / 2) for v in voisins(cartes, c)]
+            clip = pymupdf.Rect(
+                (fond_perdu - fp[0]) * MM, (fond_perdu - fp[1]) * MM,
+                (fond_perdu + CARTE_L + fp[2]) * MM, (fond_perdu + CARTE_H + fp[3]) * MM,
+            )
+            cible = pymupdf.Rect(c.x0 - fp[0] * MM, c.y0 - fp[1] * MM, c.x1 + fp[2] * MM, c.y1 + fp[3] * MM)
             cible += (verso_dx_mm * MM, verso_dy_mm * MM, verso_dx_mm * MM, verso_dy_mm * MM)
-        neuve.show_pdf_page(cible, propre, pno)
+            page.show_pdf_page(cible, tuile_doc, 0, clip=clip)
+    final.set_metadata(src.metadata)
     final.save(sortie, garbage=4, deflate=True)
 
 
@@ -141,7 +298,9 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("entree", nargs="?")
     p.add_argument("sortie", nargs="?")
-    p.add_argument("--fond-perdu", type=float, default=5, help="fond perdu en mm (défaut 5)")
+    p.add_argument("--bande-cotes", type=float, default=2.5, help="bande jaune du verso à gauche et à droite, en mm (défaut 2.5)")
+    p.add_argument("--bande-haut-bas", type=float, default=3.5, help="bande jaune du verso en haut et en bas, en mm (défaut 3.5)")
+    p.add_argument("--fond-perdu", type=float, default=4, help="fond perdu du verso vers l'extérieur de la feuille, en mm (défaut 4)")
     p.add_argument("--verso-dx", type=float, default=0, help="décalage horizontal du verso en mm (+ = droite)")
     p.add_argument("--verso-dy", type=float, default=0, help="décalage vertical du verso en mm (+ = bas)")
     p.add_argument("--calibration", metavar="PDF", help="génère la feuille de test d'alignement")
@@ -149,4 +308,4 @@ if __name__ == "__main__":
     if a.calibration:
         calibration(a.calibration)
     if a.entree and a.sortie:
-        ajuster(a.entree, a.sortie, a.fond_perdu, a.verso_dx, a.verso_dy)
+        ajuster(a.entree, a.sortie, a.bande_cotes, a.bande_haut_bas, a.fond_perdu, a.verso_dx, a.verso_dy)
